@@ -1127,11 +1127,13 @@ int sd_netlink_message_read_strv(sd_netlink_message *m, uint16_t container_type,
         return 0;
 }
 
-static int netlink_container_parse(
+static int netlink_container_parse_ext(
                 sd_netlink_message *m,
                 struct netlink_container *container,
                 struct rtattr *rta,
-                size_t rt_len) {
+                size_t rt_len,
+                bool is_list,
+                uint16_t list_item_rta_type) {
 
         _cleanup_free_ struct netlink_attribute *attributes = NULL;
         uint16_t max_attr = 0;
@@ -1144,7 +1146,13 @@ static int netlink_container_parse(
                 uint16_t attr;
 
                 attr = RTA_TYPE(rta);
-                max_attr = MAX(max_attr, attr);
+                if (is_list) {
+                        if (attr != list_item_rta_type)
+                                log_debug("sd-netlink: message parse - unexpected list attribute type");
+                        attr = ++max_attr;
+                } else {
+                        max_attr = MAX(max_attr, attr);
+                }
 
                 if (!GREEDY_REALLOC0(attributes, (size_t) max_attr + 1))
                         return -ENOMEM;
@@ -1161,6 +1169,24 @@ static int netlink_container_parse(
         container->max_attribute = max_attr;
 
         return 0;
+}
+
+static int netlink_container_parse(
+                sd_netlink_message *m,
+                struct netlink_container *container,
+                struct rtattr *rta,
+                size_t rt_len) {
+        return netlink_container_parse_ext(m, container, rta, rt_len, false, 0);
+}
+
+static int netlink_container_parse_list(
+                sd_netlink_message *m,
+                struct netlink_container *container,
+                struct rtattr *rta,
+                size_t rt_len,
+                uint16_t list_item_rta_type) {
+        return netlink_container_parse_ext(m, container, rta, rt_len, true,
+                                           list_item_rta_type);
 }
 
 int sd_netlink_message_enter_container(sd_netlink_message *m, uint16_t attr_type) {
@@ -1269,6 +1295,37 @@ int sd_netlink_message_enter_array(sd_netlink_message *m, uint16_t attr_type) {
                                     &m->containers[m->n_containers],
                                     container,
                                     size);
+        if (r < 0) {
+                m->n_containers--;
+                return r;
+        }
+
+        m->containers[m->n_containers].policy_set = m->containers[m->n_containers - 1].policy_set;
+
+        return 0;
+}
+
+int sd_netlink_message_enter_list(sd_netlink_message *m, uint16_t attr_type,
+                                  uint16_t item_attr_type) {
+        void *container;
+        size_t size;
+        int r;
+
+        assert_return(m, -EINVAL);
+        assert_return(m->n_containers < (NETLINK_CONTAINER_DEPTH - 1), -EINVAL);
+
+        r = netlink_message_read_internal(m, attr_type, &container, NULL);
+        if (r < 0)
+                return r;
+
+        size = (size_t) r;
+        m->n_containers++;
+
+        r = netlink_container_parse_list(m,
+                                         &m->containers[m->n_containers],
+                                         container,
+                                         size,
+                                         item_attr_type);
         if (r < 0) {
                 m->n_containers--;
                 return r;

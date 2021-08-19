@@ -119,6 +119,8 @@ int sd_netlink_message_read_in6_addr(sd_netlink_message *m, uint16_t attr_type, 
 int sd_netlink_message_has_flag(sd_netlink_message *m, uint16_t attr_type);
 int sd_netlink_message_enter_container(sd_netlink_message *m, uint16_t attr_type);
 int sd_netlink_message_enter_array(sd_netlink_message *m, uint16_t attr_type);
+int sd_netlink_message_enter_list(sd_netlink_message *m, uint16_t attr_type,
+                                  uint16_t item_attr_type);
 int sd_netlink_message_exit_container(sd_netlink_message *m);
 
 int sd_netlink_message_rewind(sd_netlink_message *m, sd_netlink *nl);

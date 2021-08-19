@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <linux/batman_adv.h>
+#include <linux/devlink.h>
 #include <linux/fou.h>
 #include <linux/genetlink.h>
 #include <linux/if.h>
@@ -232,6 +233,16 @@ static const NLAPolicy genl_wireguard_policies[] = {
         [WGDEVICE_A_PEERS]       = BUILD_POLICY_NESTED(genl_wireguard_peer),
 };
 
+static const NLAPolicy genl_devlink_policies[] = {
+        [DEVLINK_ATTR_BUS_NAME]         = BUILD_POLICY(STRING),
+        [DEVLINK_ATTR_DEV_NAME]         = BUILD_POLICY(STRING),
+        [DEVLINK_ATTR_PORT_INDEX]       = BUILD_POLICY(U32),
+        [DEVLINK_ATTR_PORT_TYPE]        = BUILD_POLICY(U16),
+        [DEVLINK_ATTR_PORT_NETDEV_NAME] = BUILD_POLICY(STRING),
+        [DEVLINK_ATTR_PORT_SPLIT_COUNT] = BUILD_POLICY(U32),
+        [DEVLINK_ATTR_PORT_SPLITTABLE]  = BUILD_POLICY(U8),
+};
+
 /***************** genl families *****************/
 static const NLAPolicySetUnionElement genl_policy_set_union_elements[] = {
         BUILD_UNION_ELEMENT_BY_STRING(CTRL_GENL_NAME,               genl_ctrl),
@@ -242,6 +253,7 @@ static const NLAPolicySetUnionElement genl_policy_set_union_elements[] = {
         BUILD_UNION_ELEMENT_BY_STRING(NETLBL_NLTYPE_UNLABELED_NAME, genl_netlabel),
         BUILD_UNION_ELEMENT_BY_STRING(NL80211_GENL_NAME,            genl_nl80211),
         BUILD_UNION_ELEMENT_BY_STRING(WG_GENL_NAME,                 genl_wireguard),
+        BUILD_UNION_ELEMENT_BY_STRING(DEVLINK_GENL_NAME,            genl_devlink),
 };
 
 /* This is the root type system union, so match_attribute is not necessary. */

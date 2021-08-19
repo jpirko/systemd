@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: LGPL-2.1+
+
+sources = files('''
+        devlink.c
+        devlink.h
+        devlink-port-cache.c
+        devlink-port-cache.h
+        devlink-match.c
+        devlink-match.h
+        devlink-match-dev.c
+        devlink-match-port.c
+        devlink-match-param.c
+        devlink-dev.c
+        devlink-dev.h
+        devlink-port.c
+        devlink-port.h
+        devlink-param.c
+        devlink-param.h
+        devlinkd-manager.c
+        devlinkd-manager.h
+'''.split())
+
+systemd_devlinkd_sources = files('devlinkd.c')
+
+sources += custom_target(
+        'devlink-kind-gperf.c',
+        input : 'devlink-kind-gperf.gperf',
+        output : 'devlink-kind-gperf.c',
+        command : [gperf, '@INPUT@', '--output-file', '@OUTPUT@'])
+
+sources += custom_target(
+        'devlink-gperf.c',
+        input : 'devlink-gperf.gperf',
+        output : 'devlink-gperf.c',
+        command : [gperf, '@INPUT@', '--output-file', '@OUTPUT@'])
+
+if get_option('link-devlinkd-shared')
+        devlinkd_link_with = [libshared]
+else
+        devlinkd_link_with = [libsystemd_static,
+                              libshared_static]
+endif
+
+devlink_includes = [includes, include_directories(['.'])]
+
+libdevlinkd_core = static_library(
+        'devlinkd-core',
+        sources,
+        include_directories : devlink_includes,
+        dependencies : userspace,
+        link_with : devlinkd_link_with,
+        build_by_default : false)
+
+executables += [
+        libexec_template + {
+                'name' : 'systemd-devlinkd',
+                'conditions' : ['ENABLE_DEVLINKD'],
+                'sources' : systemd_devlinkd_sources,
+                'include_directories' : devlink_includes,
+                'link_with' : [
+                        libdevlinkd_core,
+                        devlinkd_link_with,
+                ],
+        },
+]
