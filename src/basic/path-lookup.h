@@ -75,3 +75,5 @@ char **env_generator_binary_paths(RuntimeScope scope);
 
 #define PORTABLE_PROFILE_DIRS CONF_PATHS_NULSTR("systemd/portable/profile")
 int find_portable_profile(const char *name, const char *unit, char **ret_path);
+
+#define DEVLINK_DIRS ((const char* const*) CONF_PATHS_STRV("systemd/devlink"))
