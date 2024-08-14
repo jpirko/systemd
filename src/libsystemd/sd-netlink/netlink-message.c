@@ -1192,6 +1192,26 @@ static int netlink_container_nested_policy_set(
                                 key);
                 break;
         }
+        case NETLINK_TYPE_NESTED_UNION_BY_U8: {
+                const NLAPolicySetUnion *policy_set_union;
+                uint8_t key;
+
+                policy_set_union = policy_get_policy_set_union(policy);
+                if (!policy_set_union)
+                        return -EOPNOTSUPP;
+
+                r = sd_netlink_message_read_u8(
+                                m,
+                                policy_set_union_get_match_attribute(policy_set_union),
+                                &key);
+                if (r < 0)
+                        return r;
+
+                policy_set = policy_set_union_get_policy_set_by_u8(
+                                policy_set_union,
+                                key);
+                break;
+        }
         case NETLINK_TYPE_NESTED_UNION_BY_FAMILY: {
                 const NLAPolicySetUnion *policy_set_union;
                 int family;
