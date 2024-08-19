@@ -47,6 +47,8 @@ static int devlink_port_genl_split(
 
         log_devlink_info(devlink, "Split success");
 
+        devlink_expected_removal_set(devlink);
+
         return 0;
 }
 
@@ -57,6 +59,9 @@ static int devlink_port_genl_cmd_new_msg_process(
                 int message_iterator) {
         DevlinkPort *port = DEVLINK_PORT(devlink);
         int r;
+
+        if (devlink->expected_removal)
+                return 0;
 
         if (port->split_count != _DEVLINK_PORT_SPLIT_COUNT_INVALID) {
                 r = devlink_port_genl_split(devlink, lookup_key, port);
@@ -72,6 +77,7 @@ static int devlink_port_genl_cmd_del_msg_process(
                 sd_netlink_message *message,
                 int message_iterator) {
         devlink_match_port_cache_remove(devlink->manager, &lookup_key->match);
+        devlink_expected_removal_clear(devlink);
         return 0;
 }
 

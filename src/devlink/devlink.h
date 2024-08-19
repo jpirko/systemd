@@ -29,6 +29,8 @@ typedef struct Devlink {
         unsigned n_ref;
         char *filename;
         bool in_hashmap;
+        bool expected_removal;
+        sd_event_source *expected_removal_timeout_event_source;
 } Devlink;
 
 typedef struct DevlinkMonitorCommand {
@@ -122,6 +124,9 @@ void devlink_genl_process_message(sd_netlink_message *message,
 
 #define devlink_genl_message_new(cont, cmd, ret) \
         sd_genl_message_new(cont->manager->genl, DEVLINK_GENL_NAME, cmd, ret)
+
+void devlink_expected_removal_set(Devlink *devlink);
+void devlink_expected_removal_clear(Devlink *devlink);
 
 /* gperf */
 const struct ConfigPerfItem* devlink_gperf_lookup(const char *key, GPERF_LEN_TYPE length);

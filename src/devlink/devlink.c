@@ -75,6 +75,8 @@ static Devlink *devlink_alloc(Manager *m, DevlinkKind kind) {
 static Devlink *devlink_free(Devlink *devlink) {
         assert(devlink);
 
+        devlink->expected_removal_timeout_event_source = sd_event_source_disable_unref(devlink->expected_removal_timeout_event_source);
+
         if (devlink->in_hashmap)
                 hashmap_remove(devlink->manager->devlink_objs, &devlink->key);
 
@@ -254,4 +256,62 @@ void devlink_genl_process_message(sd_netlink_message *message,
                 devlink_key_fini(&key);
 
         } while (message_iterator > 0);
+}
+
+static int devlink_expected_removal_timeout_event_callback(sd_event_source *source, usec_t usec, void *userdata) {
+        Devlink *devlink = ASSERT_PTR(userdata);
+
+        assert(source == devlink->expected_removal_timeout_event_source);
+        log_devlink_warning(devlink, "Expected removal did not happen within timeout");
+
+        devlink_expected_removal_clear(devlink);
+
+        return 0;
+}
+
+#define DEVLINK_EXPECTED_REMOVAL_TIMEOUT USEC_PER_SEC * 20
+
+void devlink_expected_removal_set(Devlink *devlink) {
+        int r;
+
+        if (devlink->expected_removal_timeout_event_source) {
+                r = sd_event_source_set_time_relative(
+                                devlink->expected_removal_timeout_event_source,
+                                DEVLINK_EXPECTED_REMOVAL_TIMEOUT);
+                if (r < 0)
+                        goto errout;
+
+                r = sd_event_source_set_enabled(
+                                devlink->expected_removal_timeout_event_source,
+                                SD_EVENT_ONESHOT);
+                if (r < 0)
+                        goto errout;
+        }
+        r = sd_event_add_time_relative(
+                        devlink->manager->event,
+                        &devlink->expected_removal_timeout_event_source,
+                        CLOCK_MONOTONIC, DEVLINK_EXPECTED_REMOVAL_TIMEOUT, 0,
+                        devlink_expected_removal_timeout_event_callback,
+                        devlink);
+        if (r < 0)
+                goto errout;
+
+        (void) sd_event_source_set_description(
+                        devlink->expected_removal_timeout_event_source,
+                        "devlink-expected-removal-timeout");
+
+        devlink->expected_removal = true;
+
+        return;
+
+errout:
+       log_devlink_warning(devlink, "Failed to schedule expected removal timeout");
+}
+
+void devlink_expected_removal_clear(Devlink *devlink) {
+        //(void) sd_event_source_set_enabled(
+          //              devlink->expected_removal_timeout_event_source,
+            //            SD_EVENT_OFF);
+        devlink->expected_removal_timeout_event_source = sd_event_source_disable_unref(devlink->expected_removal_timeout_event_source);
+        devlink->expected_removal = false;
 }
