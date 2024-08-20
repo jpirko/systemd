@@ -15,6 +15,7 @@ typedef struct DevlinkMatchPortCacheItem {
         Manager *manager;
         unsigned n_ref;
         bool in_hashmap;
+        uint32_t ifindex;
         char *ifname;
         bool split;
 } DevlinkMatchPortCacheItem;
@@ -69,6 +70,7 @@ static DevlinkMatchPortCacheItem *devlink_match_port_cache_item_alloc(Manager *m
 int devlink_match_port_cache_update(
                 Manager *m,
                 DevlinkMatch *match,
+                uint32_t ifindex,
                 const char *ifname,
                 bool split) {
         _cleanup_(devlink_match_port_cache_item_freep) DevlinkMatchPortCacheItem *item;
@@ -85,6 +87,7 @@ int devlink_match_port_cache_update(
                         return -ENOMEM;
         }
 
+        item->ifindex = ifindex;
         r = free_and_strdup(&item->ifname, ifname);
         if (r < 0)
                 return r;
@@ -126,4 +129,10 @@ int devlink_match_port_cache_query(
                 return r;
         *split = item->split;
         return 0;
+}
+
+void devlink_match_port_cache_update_ifname(
+                Manager *m,
+                uint32_t ifindex,
+                const char *ifname) {
 }

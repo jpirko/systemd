@@ -16,6 +16,7 @@ typedef struct Manager Manager;
 
 struct Manager {
         sd_netlink *genl;
+        sd_netlink *rtnl;
         sd_event *event;
         sd_event_source *periodic_enumeration_event_source;
         Hashmap *devlink_objs;

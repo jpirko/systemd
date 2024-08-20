@@ -179,9 +179,14 @@ static int devlink_match_port_ifname_genl_read(
                 int *message_iterator,
                 DevlinkMatch *match) {
         DevlinkMatchPort *port = &match->port;
+        uint32_t ifindex;
         int r;
 
         assert(!port->ifname);
+
+        r = sd_netlink_message_read_u32(message, DEVLINK_ATTR_PORT_NETDEV_IFINDEX, &ifindex);
+        if (r < 0)
+                return r;
 
         r = sd_netlink_message_read_string_strdup(message, DEVLINK_ATTR_PORT_NETDEV_NAME, &port->ifname);
         if (r < 0)
@@ -189,7 +194,7 @@ static int devlink_match_port_ifname_genl_read(
 
         devlink_port_split_genl_read(message, port);
 
-        r = devlink_match_port_cache_update(m, match, port->ifname, port->split);
+        r = devlink_match_port_cache_update(m, match, ifindex, port->ifname, port->split);
         if (r < 0)
                 return log_debug_errno(r, "Failed to update port cache: %m");
 

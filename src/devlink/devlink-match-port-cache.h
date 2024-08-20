@@ -7,6 +7,7 @@
 int devlink_match_port_cache_update(
                 Manager *m,
                 DevlinkMatch *match,
+                uint32_t ifindex,
                 const char *ifname,
                 bool split);
 void devlink_match_port_cache_remove(
@@ -17,3 +18,7 @@ int devlink_match_port_cache_query(
                 DevlinkMatch *match,
                 char **ifname,
                 bool *split);
+void devlink_match_port_cache_update_ifname(
+                Manager *m,
+                uint32_t ifindex,
+                const char *ifname);
