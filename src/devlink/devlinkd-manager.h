@@ -12,6 +12,9 @@
 #include "list.h"
 #include "time-util.h"
 
+#include "devlink.h"
+#include "devlink-key.h"
+
 typedef struct Manager Manager;
 
 struct Manager {
@@ -20,7 +23,8 @@ struct Manager {
         sd_event *event;
         sd_event_source *periodic_enumeration_event_source;
         Hashmap *devlink_objs;
-        Hashmap *match_port_cache;
+        Hashmap *match_port_cache_by_key;
+        Hashmap *match_port_cache_by_ifindex;
         Hashmap *reload;
 };
 
@@ -32,5 +36,6 @@ Manager* manager_free(Manager *m);
 int manager_start(Manager *m);
 int manager_load_config(Manager *m);
 int manager_enumerate(Manager *m);
+int manager_enumerate_one(Manager *m, DevlinkKey *key);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(Manager *, manager_free);

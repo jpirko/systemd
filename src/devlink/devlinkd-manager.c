@@ -37,6 +37,7 @@
 
 #include "devlinkd-manager.h"
 #include "devlink.h"
+#include "devlink-key.h"
 #include "devlink-match-port-cache.h"
 
 /* use 128 MB for receive socket kernel queue. */
@@ -164,6 +165,31 @@ int manager_enumerate(Manager *m) {
         return manager_enumerate_internal(m, true);
 }
 
+int manager_enumerate_one(Manager *m, DevlinkKey *key) {
+        _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL;
+        _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *rep = NULL;
+        int r;
+
+        r = sd_genl_message_new(m->genl, DEVLINK_GENL_NAME,
+                                _DEVLINK_VTABLE(key->kind)->genl_enumerate_cmd, &req);
+        if (r < 0)
+                return r;
+
+        r = devlink_key_genl_append(req, key);
+        if (r < 0)
+                return r;
+
+        r = sd_netlink_call(m->genl, req, 0, &rep);
+        if (r < 0)
+                return r;
+
+        r = sd_netlink_message_get_errno(rep);
+        if (r < 0)
+                return r;
+
+        return manager_genl_process_message(m->genl, rep, m);
+}
+
 #define MANAGER_PERIODIC_ENUMERATION_INTERVAL (USEC_PER_SEC / 4)
 
 static int manager_periodic_enumeration_event_callback(sd_event_source *source, usec_t usec, void *userdata) {
@@ -254,8 +280,8 @@ static int manager_setup_rtnl_filter(Manager *manager) {
 
 static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *message, Manager *manager) {
         const char *ifname;
-        int ifindex;
         uint16_t type;
+        int ifindex;
         int r;
 
         assert(rtnl);
@@ -390,7 +416,8 @@ Manager* manager_free(Manager *m) {
                 return NULL;
 
         m->devlink_objs = hashmap_free(m->devlink_objs);
-        m->match_port_cache = hashmap_free(m->match_port_cache);
+        m->match_port_cache_by_ifindex = hashmap_free(m->match_port_cache_by_ifindex);
+        m->match_port_cache_by_key = hashmap_free(m->match_port_cache_by_key);
         m->reload = hashmap_free(m->reload);
 
         sd_netlink_unref(m->genl);

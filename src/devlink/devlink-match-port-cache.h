@@ -20,5 +20,5 @@ int devlink_match_port_cache_query(
                 bool *split);
 void devlink_match_port_cache_update_ifname(
                 Manager *m,
-                uint32_t ifindex,
+                uint64_t ifindex,
                 const char *ifname);

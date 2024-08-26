@@ -6,7 +6,6 @@
 #include "netlink-util.h"
 #include "siphash24.h"
 
-#include "devlinkd-manager.h"
 #include "devlink-match-dev.h"
 #include "devlink-match-port.h"
 #include "devlink-match-param.h"
@@ -29,6 +28,9 @@ typedef struct DevlinkMatch {
         DevlinkMatchParam param;
         DevlinkMatchHealthReporter health_reporter;
 } DevlinkMatch;
+
+struct Manager;
+typedef struct Manager Manager;
 
 typedef struct DevlinkMatchVTable {
         void (*free)(DevlinkMatch *match);
