@@ -12,11 +12,4 @@ typedef struct DevlinkPort {
 
 DEFINE_DEVLINK_CAST(PORT, DevlinkPort);
 
-extern int devlink_port_genl_index_read(
-                sd_netlink_message *message,
-                Devlink *devlink);
-extern int devlink_port_genl_index_append(
-                sd_netlink_message *message,
-                const Devlink *devlink);
-
 extern const DevlinkVTable devlink_port_vtable;

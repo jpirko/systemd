@@ -14,8 +14,8 @@
 typedef enum DevlinkMatchBit {
         DEVLINK_MATCH_BIT_DEV = 1 << 0,
         DEVLINK_MATCH_BIT_PORT_INDEX = 1 << 1,
-        DEVLINK_MATCH_BIT_PORT_IFNAME = 1 << 2,
-        DEVLINK_MATCH_BIT_PORT_CACHED_IFNAME = 1 << 3, /* For use with non-port objects */
+        DEVLINK_MATCH_BIT_PORT_SPLIT = 1 << 2,
+        DEVLINK_MATCH_BIT_PORT_IFINDEX = 1 << 3,
         DEVLINK_MATCH_BIT_PARAM = 1 << 4,
         DEVLINK_MATCH_BIT_HEALTH_REPORTER = 1 << 5,
 } DevlinkMatchBit;
@@ -40,14 +40,14 @@ typedef struct DevlinkMatchVTable {
         int (*compare_func)(const DevlinkMatch *x, const DevlinkMatch *y);
         void (*copy_func)(DevlinkMatch *dst, const DevlinkMatch *src);
         int (*duplicate_func)(DevlinkMatch *dst, const DevlinkMatch *src);
-        int (*genl_read)(sd_netlink_message *message, Manager *m, int *message_iterator, DevlinkMatch *match);
+        int (*genl_read)(sd_netlink_message *message, Manager *m, DevlinkMatch *match);
         int (*genl_append)(sd_netlink_message *message, const DevlinkMatch *match);
 } DevlinkMatchVTable;
 
 extern const DevlinkMatchVTable devlink_match_dev_vtable;
 extern const DevlinkMatchVTable devlink_match_port_index_vtable;
+extern const DevlinkMatchVTable devlink_match_port_split_vtable;
 extern const DevlinkMatchVTable devlink_match_port_ifname_vtable;
-extern const DevlinkMatchVTable devlink_match_port_cached_ifname_vtable;
 extern const DevlinkMatchVTable devlink_match_param_vtable;
 extern const DevlinkMatchVTable devlink_match_health_reporter_vtable;
 
@@ -73,7 +73,6 @@ int devlink_match_duplicate(
 void devlink_match_genl_read(
                 sd_netlink_message *message,
                 Manager *m,
-                int *message_iterator,
                 DevlinkMatch *match,
                 DevlinkMatchSet *matchset);
 int devlink_match_genl_append(

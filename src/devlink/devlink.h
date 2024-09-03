@@ -33,10 +33,19 @@ typedef struct Devlink {
         sd_event_source *expected_removal_timeout_event_source;
 } Devlink;
 
+enum DevlinkMonitorCommandRetval {
+        /* Success. */
+        DEVLINK_MONITOR_COMMAND_RETVAL_OK,
+        /* Indicate that the object should be deleted. */
+        DEVLINK_MONITOR_COMMAND_RETVAL_DELETE,
+} DevlinkMonitorCommandRetval;
+
 typedef struct DevlinkMonitorCommand {
         enum devlink_command cmd;
+        /* Returns negative value in case of error, on success
+         * a value of enum DevlinkMonitorCommandRetval. */
         int (*msg_process)(Devlink *devlink, DevlinkKey *lookup_key,
-                           sd_netlink_message *message, int message_iterator);
+                           sd_netlink_message *message);
 } DevlinkMonitorCommand;
 
 typedef struct DevlinkVTable {
@@ -49,6 +58,9 @@ typedef struct DevlinkVTable {
 
         /* Matchsets bitfields, ended by 0 */
         const DevlinkMatchSet *matchsets;
+
+        /* Allocate object on demand, in opposite to the ones created during config files loading. */
+        bool alloc_on_demand;
 
         void (*init)(Devlink *devlink);
 
@@ -64,7 +76,15 @@ typedef struct DevlinkVTable {
          * for enumeration messages processing. */
         const DevlinkMonitorCommand *genl_monitor_cmds;
         unsigned int genl_monitor_cmds_count;
+
+        /* Command used for enumeration (dump), 0 in case enumeration is disabled. */
         enum devlink_command genl_enumerate_cmd;
+
+        /* For buggy objects that send reply of wrong cmd. */
+        enum devlink_command genl_need_enumeration_reply_cmd_fix;
+
+        /* For buggy objects that don't send notification, there
+         * is a need for periodic enumerations. */
         bool genl_need_periodic_enumeration;
 } DevlinkVTable;
 
@@ -117,7 +137,9 @@ Devlink *devlink_ref(Devlink *devlink);
 DEFINE_TRIVIAL_DESTRUCTOR(devlink_destroy_callback, Devlink, devlink_unref);
 DEFINE_TRIVIAL_CLEANUP_FUNC(Devlink*, devlink_unref);
 
-int devlink_load(Manager *manager, bool reload);
+Devlink *devlink_get(Manager *m, DevlinkKey *key);
+
+int devlink_load(Manager *m, bool reload);
 void devlink_genl_process_message(sd_netlink_message *message,
                                   Manager *m, DevlinkKind kind,
                                   const DevlinkMonitorCommand *monitor_cmd);

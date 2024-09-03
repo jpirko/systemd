@@ -11,8 +11,8 @@
 const DevlinkMatchVTable * const devlink_match_vtable[] = {
         &devlink_match_dev_vtable,
         &devlink_match_port_index_vtable,
+        &devlink_match_port_split_vtable,
         &devlink_match_port_ifname_vtable,
-        &devlink_match_port_cached_ifname_vtable,
         &devlink_match_param_vtable,
         &devlink_match_health_reporter_vtable,
 };
@@ -122,14 +122,13 @@ int devlink_match_duplicate(
 void devlink_match_genl_read(
                 sd_netlink_message *message,
                 Manager *m,
-                int *message_iterator,
                 DevlinkMatch *match,
                 DevlinkMatchSet *matchset) {
         unsigned int i;
         int r;
 
         for (i = 0; i < DEVLINK_MATCH_VTABLE_SIZE; i++) {
-                r = devlink_match_vtable[i]->genl_read(message, m, message_iterator, match);
+                r = devlink_match_vtable[i]->genl_read(message, m, match);
                 if (r < 0)
                         continue;
                 *matchset |= 1 << i;

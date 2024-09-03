@@ -269,8 +269,7 @@ static int devlink_param_genl_set(
 static int devlink_param_genl_cmd_new_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
+                sd_netlink_message *message) {
         DevlinkParam *param = DEVLINK_PARAM(devlink);
         uint16_t list_size;
         uint8_t cmode;
@@ -316,8 +315,8 @@ static int devlink_param_genl_cmd_new_msg_process(
 }
 
 static const DevlinkMatchSet devlink_param_matchsets[] = {
-        DEVLINK_MATCH_BIT_PORT_CACHED_IFNAME | DEVLINK_MATCH_BIT_PARAM,
-        DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX | DEVLINK_MATCH_BIT_PARAM,
+        DEVLINK_MATCH_BIT_PORT_IFNAME | DEVLINK_MATCH_BIT_PARAM,
+        DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX | DEVLINK_MATCH_BIT_PORT_SPLIT | DEVLINK_MATCH_BIT_PARAM,
         DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PARAM,
         0,
 };

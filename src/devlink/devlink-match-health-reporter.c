@@ -52,7 +52,6 @@ static int devlink_match_health_reporter_compare_func(const DevlinkMatch *x, con
 static int devlink_match_health_reporter_genl_read(
                 sd_netlink_message *message,
                 Manager *m,
-                int *message_iterator,
                 DevlinkMatch *match) {
         DevlinkMatchHealthReporter *health_reporter = &match->health_reporter;
         int r;

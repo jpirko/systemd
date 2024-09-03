@@ -24,6 +24,8 @@
 
 const DevlinkVTable * const devlink_vtable[_DEVLINK_KIND_MAX] = {
         [DEVLINK_KIND_DEV] = &devlink_dev_vtable,
+        [DEVLINK_KIND_PORT_CACHE] = &devlink_port_cache_vtable,
+        [DEVLINK_KIND_IFINDEX_CACHE] = &devlink_ifindex_cache_vtable,
         [DEVLINK_KIND_PORT] = &devlink_port_vtable,
         [DEVLINK_KIND_PARAM] = &devlink_param_vtable,
         [DEVLINK_KIND_HEALTH_REPORTER] = &devlink_health_reporter_vtable,
@@ -93,6 +95,56 @@ static Devlink *devlink_free(Devlink *devlink) {
 DEFINE_TRIVIAL_REF_UNREF_FUNC(Devlink, devlink, devlink_free);
 
 DEFINE_PRIVATE_HASH_OPS_WITH_VALUE_DESTRUCTOR(devlink_hash_ops, DevlinkKey, devlink_key_hash_func, devlink_key_compare_func, Devlink, devlink_free);
+
+static int devlink_put(Manager *m, Devlink *devlink) {
+        int r;
+
+        r = hashmap_ensure_put(&m->devlink_objs, &devlink_hash_ops, &devlink->key, devlink);
+        if (r == -ENOMEM) {
+                return log_oom();
+        } else if (r < 0) {
+                return r;
+        }
+        devlink->in_hashmap = true;
+        return 0;
+}
+
+static Devlink *devlink_create(Manager *m, DevlinkKey *key) {
+        _cleanup_(devlink_unrefp) Devlink *devlink;
+        int r;
+
+        devlink = devlink_alloc(m, key->kind);
+        if (!devlink) {
+                (void) log_oom();
+                return NULL;
+        }
+        r = devlink_key_duplicate(&devlink->key, key);
+        if (r < 0) {
+                (void) log_oom();
+                return NULL;
+        }
+        r = devlink_put(m, devlink);
+        if (r < 0) {
+                assert(r != -EEXIST);
+                return NULL;
+        }
+        devlink_ref(devlink);
+
+        return devlink;
+}
+
+static Devlink *devlink_get_may_create(Manager *m, DevlinkKey *key) {
+        Devlink *devlink = hashmap_get(m->devlink_objs, key);
+
+        if (!devlink && _DEVLINK_VTABLE(key->kind)->alloc_on_demand)
+                devlink = devlink_create(m, key);
+
+        return devlink;
+}
+
+Devlink *devlink_get(Manager *m, DevlinkKey *key) {
+        return hashmap_get(m->devlink_objs, key);
+}
 
 static int devlink_matchset_select(Devlink *devlink) {
         DevlinkKey *key = &devlink->key;
@@ -176,10 +228,8 @@ static int devlink_load_one(Manager *m, const char *filename) {
                         return r;
         }
 
-        r = hashmap_ensure_put(&m->devlink_objs, &devlink_hash_ops, &devlink->key, devlink);
-        if (r == -ENOMEM) {
-                return log_oom();
-        } else if (r == -EEXIST) {
+        r = devlink_put(m, devlink);
+        if (r == -EEXIST) {
                 Devlink *d = hashmap_get(m->devlink_objs, &devlink->key);
 
                 assert(d);
@@ -189,7 +239,7 @@ static int devlink_load_one(Manager *m, const char *filename) {
         } else if (r < 0) {
                 return r;
         }
-        devlink->in_hashmap = true;
+
         devlink_ref(devlink);
 
         log_devlink_debug(devlink, "Loaded");
@@ -221,41 +271,40 @@ int devlink_load(Manager *m, bool reload) {
 void devlink_genl_process_message(sd_netlink_message *message,
                                   Manager *m, DevlinkKind kind,
                                   const DevlinkMonitorCommand *monitor_cmd) {
+        DevlinkVTable *vtable _DEVLINK_VTABLE(kind);
         DevlinkMatchSet matchset;
-        int message_iterator = 0;
         DevlinkKey key = {};
         Devlink *devlink;
         unsigned int i;
         int r;
 
-        do {
-                devlink_key_init(&key, kind);
-                devlink_match_genl_read(message, m, &message_iterator, &key.match, &key.matchset);
-                devlink = NULL;
+        devlink_key_init(&key, kind);
+        devlink_match_genl_read(message, m, &key.match, &key.matchset);
+        devlink = NULL;
 
-                i = 0;
-                while ((matchset = _DEVLINK_VTABLE(kind)->matchsets[i++])) {
-                        /* Check if the current matchset is subset of the one read from message. */
-                        if ((matchset & key.matchset) != matchset)
-                                continue;
-                        /* For the hashmap lookup, the matchset needs to be set to the current one */
-                        SWAP_TWO(key.matchset, matchset);
-                        devlink = hashmap_get(m->devlink_objs, &key);
-                        SWAP_TWO(key.matchset, matchset);
-                        if (devlink)
-                                break;
-                }
+        i = 0;
+        while ((matchset = vtable->matchsets[i++])) {
+                /* Check if the current matchset is subset of the one read from message. */
+                if ((matchset & key.matchset) != matchset)
+                        continue;
+                /* For the hashmap lookup, the matchset needs to be set to the current one */
+                SWAP_TWO(key.matchset, matchset);
+                devlink = devlink_get_may_create(m, &key);
+                SWAP_TWO(key.matchset, matchset);
+                if (devlink)
+                        break;
+        }
 
-                if (devlink) {
-                        log_devlink_debug(devlink, "Matched object");
-                        r = monitor_cmd->msg_process(devlink, &key, message, message_iterator);
-                        if (r < 0)
-                                log_debug_errno(r, "Failed to process netlink message, ignoring: %m");
-                }
+        if (devlink) {
+                log_devlink_debug(devlink, "Matched object");
+                r = monitor_cmd->msg_process(devlink, &key, message);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to process netlink message, ignoring: %m");
+                if (r == DEVLINK_MONITOR_COMMAND_RETVAL_DELETE)
+                        devlink_unref(devlink);
+        }
 
-                devlink_key_fini(&key);
-
-        } while (message_iterator > 0);
+        devlink_key_fini(&key);
 }
 
 static int devlink_expected_removal_timeout_event_callback(sd_event_source *source, usec_t usec, void *userdata) {

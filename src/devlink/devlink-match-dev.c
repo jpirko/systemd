@@ -127,7 +127,6 @@ static int devlink_match_dev_duplicate_func(DevlinkMatch *dst, const DevlinkMatc
 static int devlink_match_dev_genl_read(
                 sd_netlink_message *message,
                 Manager *m,
-                int *message_iterator,
                 DevlinkMatch *match) {
         DevlinkMatchDev *dev = &match->dev;
         int r;

@@ -44,10 +44,12 @@
 #define RCVBUF_SIZE    (128*1024*1024)
 
 static void _manager_genl_process_message(sd_netlink *genl, sd_netlink_message *message,
-                                          Manager *m, DevlinkKind kind) {
+                                          Manager *m, uint8_t enumerate_cmd) {
         const DevlinkMonitorCommand *monitor_cmd;
+        const DevlinkVTable *vtable;
         const char *family;
         uint8_t cmd;
+        int i;
         int r;
 
         assert(genl);
@@ -71,40 +73,31 @@ static void _manager_genl_process_message(sd_netlink *genl, sd_netlink_message *
                 return;
         }
 
-        if (kind == _DEVLINK_KIND_INVALID) {
-                const DevlinkVTable *vtable;
-                int i;
-
+        if (enumerate_cmd == DEVLINK_CMD_UNSPEC) {
                 r = sd_genl_message_get_command(genl, message, &cmd);
                 if (r < 0) {
                         log_debug_errno(r, "devlink netlink: Failed to determine genl message command, ignoring: %m");
                         return;
                 }
-
-                devlink_for_each_vtable(vtable, i) {
-                        FOREACH_ARRAY(j, vtable->genl_monitor_cmds, vtable->genl_monitor_cmds_count) {
-                                if (j->cmd == cmd) {
-                                        kind = i;
-                                        monitor_cmd = j;
-                                        break;
-                                }
-                        }
-                }
-                if (kind == _DEVLINK_KIND_INVALID)
-                        return;
-
-                log_debug("devlink netlink: Received %s(%u) message.", strna(devlink_cmd_to_string(cmd)), cmd);
         } else {
-                /* Use the first command in array for enumeration messages processing. */
-                monitor_cmd = &_DEVLINK_VTABLE(kind)->genl_monitor_cmds[0];
+                /* In case of enumeration, assume reply cmd is the same cmd as used for enumeration.
+                 * Works around buggy kernel returning wrong reply cmd for some objects. */
+                cmd = enumerate_cmd;
         }
 
-        devlink_genl_process_message(message, m, kind, monitor_cmd);
+        log_debug("devlink netlink: Received %s(%u) message.", strna(devlink_cmd_to_string(cmd)), cmd);
+
+        devlink_for_each_vtable(vtable, i) {
+                FOREACH_ARRAY(j, vtable->genl_monitor_cmds, vtable->genl_monitor_cmds_count) {
+                        if (j->cmd == cmd)
+                                devlink_genl_process_message(message, m, i, j);
+                }
+        }
 }
 
 static int manager_genl_process_message(sd_netlink *genl, sd_netlink_message *message,
                                         Manager *m) {
-        _manager_genl_process_message(genl, message, m, _DEVLINK_KIND_INVALID);
+        _manager_genl_process_message(genl, message, m, DEVLINK_CMD_UNSPEC);
         return 0;
 }
 
@@ -112,7 +105,7 @@ static int manager_genl_enumerate_process_message(
                 sd_netlink *genl,
                 sd_netlink_message *message,
                 Manager *m,
-                DevlinkKind kind) {
+                uint8_t enumerate_cmd) {
         log_debug("devlink netlink: Incoming enumeration message");
         _manager_genl_process_message(genl, message, m, kind);
         return 0;
@@ -121,13 +114,16 @@ static int manager_genl_enumerate_process_message(
 static int manager_enumerate_kind(Manager *m, DevlinkKind kind) {
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL;
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *rep = NULL;
+        uint8_t enumerate_cmd = _DEVLINK_VTABLE(kind)->genl_enumerate_cmd;
         int k, r;
+
+        if (enumerate_cmd == DEVLINK_CMD_UNSPEC)
+                return 0;
 
         assert(m);
         assert(m->genl);
 
-        r = sd_genl_message_new(m->genl, DEVLINK_GENL_NAME,
-                                _DEVLINK_VTABLE(kind)->genl_enumerate_cmd, &req);
+        r = sd_genl_message_new(m->genl, DEVLINK_GENL_NAME, enumerate_cmd, &req);
         if (r < 0)
                 return r;
 
@@ -140,7 +136,7 @@ static int manager_enumerate_kind(Manager *m, DevlinkKind kind) {
                 return r;
 
         for (sd_netlink_message *rep_one = rep; rep_one; rep_one = sd_netlink_message_next(rep_one)) {
-                k = manager_genl_enumerate_process_message(m->genl, rep_one, m, kind);
+                k = manager_genl_enumerate_process_message(m->genl, rep_one, m, enumereate_cmd);
                 if (k < 0 && r >= 0)
                         r = k;
         }
@@ -148,7 +144,7 @@ static int manager_enumerate_kind(Manager *m, DevlinkKind kind) {
         return r;
 }
 
-static int manager_enumerate_internal(Manager *m, bool initial) {
+static int manager_enumerate_genl(Manager *m, bool initial) {
         int r, i;
 
         devlink_for_each_kind(i) {
@@ -162,16 +158,19 @@ static int manager_enumerate_internal(Manager *m, bool initial) {
 }
 
 int manager_enumerate(Manager *m) {
-        return manager_enumerate_internal(m, true);
+        return manager_enumerate_genl(m, true);
 }
 
 int manager_enumerate_one(Manager *m, DevlinkKey *key) {
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL;
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *rep = NULL;
+        uint8_t enumerate_cmd = _DEVLINK_VTABLE(key->kind)->genl_enumerate_cmd;
         int r;
 
-        r = sd_genl_message_new(m->genl, DEVLINK_GENL_NAME,
-                                _DEVLINK_VTABLE(key->kind)->genl_enumerate_cmd, &req);
+        if (enumerate_cmd == DEVLINK_CMD_UNSPEC)
+                return 0;
+
+        r = sd_genl_message_new(m->genl, DEVLINK_GENL_NAME, enumerate_cmd, &req);
         if (r < 0)
                 return r;
 
@@ -198,7 +197,7 @@ static int manager_periodic_enumeration_event_callback(sd_event_source *source, 
 
         assert(source == m->periodic_enumeration_event_source);
 
-        (void) manager_enumerate_internal(m, false);
+        (void) manager_enumerate_genl(m, false);
 
         r = sd_event_source_set_time_relative(
                         m->periodic_enumeration_event_source,
@@ -255,7 +254,7 @@ static int manager_connect_genl(Manager *m) {
         return 0;
 }
 
-static int manager_setup_rtnl_filter(Manager *manager) {
+static int manager_setup_rtnl_filter(Manager *m) {
         struct sock_filter filter[] = {
                 /* Check the packet length. */
                 BPF_STMT(BPF_LD + BPF_W + BPF_LEN, 0),                                      /* A <- packet length */
@@ -272,13 +271,13 @@ static int manager_setup_rtnl_filter(Manager *manager) {
                 BPF_STMT(BPF_RET + BPF_K, UINT32_MAX),                                      /* accept */
         };
 
-        assert(manager);
-        assert(manager->rtnl);
+        assert(m);
+        assert(m->rtnl);
 
-        return sd_netlink_attach_filter(manager->rtnl, ELEMENTSOF(filter), filter);
+        return sd_netlink_attach_filter(m->rtnl, ELEMENTSOF(filter), filter);
 }
 
-static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *message, Manager *manager) {
+static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *message, Manager *m) {
         const char *ifname;
         uint16_t type;
         int ifindex;
@@ -286,7 +285,7 @@ static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *messa
 
         assert(rtnl);
         assert(message);
-        assert(manager);
+        assert(m);
 
         if (sd_netlink_message_is_error(message)) {
                 r = sd_netlink_message_get_errno(message);
@@ -319,14 +318,8 @@ static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *messa
                 log_warning_errno(r, "rtnl: Received link message without ifname, ignoring: %m");
                 return 0;
         }
+        devlink_ifname_cache_update(m, ifindex, 0, ifname);
 
-        switch (type) {
-        case RTM_NEWLINK:
-                devlink_match_port_cache_update_ifname(manager, ifindex, ifname);
-                break;
-        default:
-                assert_not_reached();
-        }
         return 0;
 }
 

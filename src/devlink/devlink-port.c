@@ -9,7 +9,6 @@
 
 #include "devlink.h"
 #include "devlink-port.h"
-#include "devlink-match-port-cache.h"
 
 static void devlink_port_init(Devlink *devlink) {
         DevlinkPort *port = DEVLINK_PORT(devlink);
@@ -55,8 +54,7 @@ static int devlink_port_genl_split(
 static int devlink_port_genl_cmd_new_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
+                sd_netlink_message *message) {
         DevlinkPort *port = DEVLINK_PORT(devlink);
         int r;
 
@@ -74,8 +72,7 @@ static int devlink_port_genl_cmd_new_msg_process(
 static int devlink_port_genl_cmd_del_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
+                sd_netlink_message *message) {
         devlink_match_port_cache_remove(devlink->manager, &lookup_key->match);
         devlink_expected_removal_clear(devlink);
         return 0;
@@ -83,7 +80,7 @@ static int devlink_port_genl_cmd_del_msg_process(
 
 static const DevlinkMatchSet devlink_port_matchsets[] = {
         DEVLINK_MATCH_BIT_PORT_IFNAME,
-        DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX,
+        DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX | DEVLINK_MATCH_BIT_PORT_SPLIT,
         0,
 };
 
@@ -100,4 +97,5 @@ const DevlinkVTable devlink_port_vtable = {
         .genl_monitor_cmds = devlink_port_commands,
         .genl_monitor_cmds_count = ELEMENTSOF(devlink_port_commands),
         .genl_enumerate_cmd = DEVLINK_CMD_PORT_GET,
+        .genl_enumerate_reply_fix = true;
 };

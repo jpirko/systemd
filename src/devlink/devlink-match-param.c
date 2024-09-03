@@ -52,7 +52,6 @@ static int devlink_match_param_compare_func(const DevlinkMatch *x, const Devlink
 static int devlink_match_param_genl_read(
                 sd_netlink_message *message,
                 Manager *m,
-                int *message_iterator,
                 DevlinkMatch *match) {
         DevlinkMatchParam *param = &match->param;
         int r;
