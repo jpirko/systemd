@@ -97,5 +97,4 @@ const DevlinkVTable devlink_port_vtable = {
         .genl_monitor_cmds = devlink_port_commands,
         .genl_monitor_cmds_count = ELEMENTSOF(devlink_port_commands),
         .genl_enumerate_cmd = DEVLINK_CMD_PORT_GET,
-        .genl_enumerate_reply_fix = true;
 };

@@ -14,14 +14,6 @@
 #include "devlinkd-manager.h"
 
 #define DEVLINK_COMMON_SECTIONS "Match\0"
-/* This is the list of known sections. We need to ignore them in the initial parsing phase. */
-#define DEVLINK_OTHER_SECTIONS                          \
-        "-MatchPort\0"                                  \
-        "-MatchParam\0"                                 \
-        "-Eswitch\0"                                    \
-        "-Reload\0"                                     \
-        "-Split\0"                                      \
-        "-Param\0"
 
 typedef struct Devlink {
         DevlinkKey key;

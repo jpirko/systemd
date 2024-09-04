@@ -20,6 +20,7 @@
 #include "devlink-port.h"
 #include "devlink-param.h"
 #include "devlink-health-reporter.h"
+#include "devlink-ifname.h"
 #include "devlinkd-manager.h"
 
 const DevlinkVTable * const devlink_vtable[_DEVLINK_KIND_MAX] = {
@@ -78,6 +79,8 @@ static Devlink *devlink_free(Devlink *devlink) {
         assert(devlink);
 
         devlink->expected_removal_timeout_event_source = sd_event_source_disable_unref(devlink->expected_removal_timeout_event_source);
+
+        devlink_ifname_untrack(devlink);
 
         if (devlink->in_hashmap)
                 hashmap_remove(devlink->manager->devlink_objs, &devlink->key);
@@ -187,7 +190,7 @@ static int devlink_load_one(Manager *m, const char *filename) {
         r = config_parse_many(
                         STRV_MAKE_CONST(filename), DEVLINK_DIRS, dropin_dirname,
                         /* root = */ NULL,
-                        DEVLINK_COMMON_SECTIONS DEVLINK_OTHER_SECTIONS,
+                        DEVLINK_COMMON_SECTIONS,
                         config_item_perf_lookup, devlink_kind_gperf_lookup,
                         CONFIG_PARSE_RELAXED | CONFIG_PARSE_WARN, &kind,
                         NULL, NULL);
@@ -239,6 +242,10 @@ static int devlink_load_one(Manager *m, const char *filename) {
         } else if (r < 0) {
                 return r;
         }
+
+        r = devlink_ifname_track(devlink);
+        if (r < 0)
+                return r;
 
         devlink_ref(devlink);
 
