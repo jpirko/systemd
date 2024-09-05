@@ -13,8 +13,6 @@ sources = files('''
         devlink-match-dev.h
         devlink-match-port.c
         devlink-match-port.h
-        devlink-match-port-cache.c
-        devlink-match-port-cache.h
         devlink-match-param.c
         devlink-match-param.h
         devlink-match-health-reporter.c
@@ -29,6 +27,10 @@ sources = files('''
         devlink-param.h
         devlink-health-reporter.c
         devlink-health-reporter.h
+        devlink-port-cache.c
+        devlink-port-cache.h
+        devlink-reload.c
+        devlink-reload.h
         devlinkd-manager.c
         devlinkd-manager.h
 '''.split())

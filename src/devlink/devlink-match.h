@@ -15,7 +15,7 @@ typedef enum DevlinkMatchBit {
         DEVLINK_MATCH_BIT_DEV = 1 << 0,
         DEVLINK_MATCH_BIT_PORT_INDEX = 1 << 1,
         DEVLINK_MATCH_BIT_PORT_SPLIT = 1 << 2,
-        DEVLINK_MATCH_BIT_PORT_IFINDEX = 1 << 3,
+        DEVLINK_MATCH_BIT_PORT_IFNAME = 1 << 3,
         DEVLINK_MATCH_BIT_PARAM = 1 << 4,
         DEVLINK_MATCH_BIT_HEALTH_REPORTER = 1 << 5,
 } DevlinkMatchBit;

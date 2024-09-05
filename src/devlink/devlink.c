@@ -24,9 +24,9 @@
 #include "devlinkd-manager.h"
 
 const DevlinkVTable * const devlink_vtable[_DEVLINK_KIND_MAX] = {
+        [DEVLINK_KIND_RELOAD] = &devlink_reload_vtable,
         [DEVLINK_KIND_DEV] = &devlink_dev_vtable,
         [DEVLINK_KIND_PORT_CACHE] = &devlink_port_cache_vtable,
-        [DEVLINK_KIND_IFINDEX_CACHE] = &devlink_ifindex_cache_vtable,
         [DEVLINK_KIND_PORT] = &devlink_port_vtable,
         [DEVLINK_KIND_PARAM] = &devlink_param_vtable,
         [DEVLINK_KIND_HEALTH_REPORTER] = &devlink_health_reporter_vtable,
@@ -80,7 +80,7 @@ static Devlink *devlink_free(Devlink *devlink) {
 
         devlink->expected_removal_timeout_event_source = sd_event_source_disable_unref(devlink->expected_removal_timeout_event_source);
 
-        devlink_ifname_untrack(devlink);
+        devlink_ifname_tracker_del(devlink);
 
         if (devlink->in_hashmap)
                 hashmap_remove(devlink->manager->devlink_objs, &devlink->key);
@@ -97,7 +97,13 @@ static Devlink *devlink_free(Devlink *devlink) {
 
 DEFINE_TRIVIAL_REF_UNREF_FUNC(Devlink, devlink, devlink_free);
 
-DEFINE_PRIVATE_HASH_OPS_WITH_VALUE_DESTRUCTOR(devlink_hash_ops, DevlinkKey, devlink_key_hash_func, devlink_key_compare_func, Devlink, devlink_free);
+DEFINE_PRIVATE_HASH_OPS_WITH_VALUE_DESTRUCTOR(
+        devlink_hash_ops,
+        DevlinkKey,
+        devlink_key_hash_func,
+        devlink_key_compare_func,
+        Devlink,
+        devlink_unref);
 
 static int devlink_put(Manager *m, Devlink *devlink) {
         int r;
@@ -243,7 +249,7 @@ static int devlink_load_one(Manager *m, const char *filename) {
                 return r;
         }
 
-        r = devlink_ifname_track(devlink);
+        r = devlink_ifname_tracker_add(devlink);
         if (r < 0)
                 return r;
 

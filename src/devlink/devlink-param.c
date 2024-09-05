@@ -261,7 +261,7 @@ static int devlink_param_genl_set(
         log_devlink_info(devlink, "Set success");
 
         if (cmode == DEVLINK_PARAM_CMODE_DRIVERINIT || cmode == DEVLINK_PARAM_CMODE_PERMANENT)
-                devlink_reload_queue(devlink->manager, lookup_key);
+                devlink_reload_queue(devlink->manager, &devlink->key.match);
 
         return 0;
 }
@@ -311,7 +311,7 @@ static int devlink_param_genl_cmd_new_msg_process(
         (void) sd_netlink_message_exit_container(message);
         (void) sd_netlink_message_exit_container(message);
 
-        return 0;
+        return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 }
 
 static const DevlinkMatchSet devlink_param_matchsets[] = {

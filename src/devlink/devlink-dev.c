@@ -85,8 +85,7 @@ static int devlink_dev_genl_eswitch_get(
 static int devlink_dev_genl_cmd_new_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
+                sd_netlink_message *message) {
         DevlinkDev *dev = DEVLINK_DEV(devlink);
         uint16_t current_eswitch_mode;
         int r;
@@ -104,16 +103,7 @@ static int devlink_dev_genl_cmd_new_msg_process(
                 }
         }
 
-        return 0;
-}
-
-static int devlink_dev_genl_cmd_del_msg_process(
-                Devlink *devlink,
-                DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
-        devlink_reload_cleanup(devlink->manager, lookup_key);
-        return 0;
+        return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 }
 
 static const DevlinkMatchSet devlink_dev_matchsets[] = {
@@ -123,7 +113,6 @@ static const DevlinkMatchSet devlink_dev_matchsets[] = {
 
 static const DevlinkMonitorCommand devlink_dev_commands[] = {
         { DEVLINK_CMD_NEW, devlink_dev_genl_cmd_new_msg_process },
-        { DEVLINK_CMD_DEL, devlink_dev_genl_cmd_del_msg_process },
 };
 
 const DevlinkVTable devlink_dev_vtable = {

@@ -50,7 +50,7 @@ const DevlinkVTable devlink_port_cache_vtable = {
 };
 
 int devlink_port_cache_query(Manager *m, DevlinkMatch *match, uint32_t *ifindex) {
-        DevlinkPortCache *port_cache = DEVLINK_PORT_CACHE(devlink);
+        DevlinkPortCache *port_cache;
         Devlink *devlink;
         DevlinkKey key;
         int r;

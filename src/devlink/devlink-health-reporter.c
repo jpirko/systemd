@@ -181,7 +181,7 @@ static int devlink_health_reporter_genl_cmd_get_msg_process(
         (void) sd_netlink_message_exit_container(message);
 
         if (!set_needed)
-                return 0;
+                return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 
         r = sd_netlink_call(devlink->manager->genl, req, 0, &rep);
         if (r < 0)
@@ -193,7 +193,7 @@ static int devlink_health_reporter_genl_cmd_get_msg_process(
 
         log_devlink_info(devlink, "Set success");
 
-        return 0;
+        return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 }
 
 static const DevlinkMatchSet devlink_health_reporter_matchsets[] = {

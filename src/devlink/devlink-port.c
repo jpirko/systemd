@@ -59,23 +59,22 @@ static int devlink_port_genl_cmd_new_msg_process(
         int r;
 
         if (devlink->expected_removal)
-                return 0;
+                return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 
         if (port->split_count != _DEVLINK_PORT_SPLIT_COUNT_INVALID) {
                 r = devlink_port_genl_split(devlink, lookup_key, port);
                 if (r < 0)
                         return r;
         }
-        return 0;
+        return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 }
 
 static int devlink_port_genl_cmd_del_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
                 sd_netlink_message *message) {
-        devlink_match_port_cache_remove(devlink->manager, &lookup_key->match);
         devlink_expected_removal_clear(devlink);
-        return 0;
+        return DEVLINK_MONITOR_COMMAND_RETVAL_OK;
 }
 
 static const DevlinkMatchSet devlink_port_matchsets[] = {

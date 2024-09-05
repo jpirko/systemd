@@ -9,7 +9,8 @@
 
 #include "devlink-match.h"
 #include "devlink-match-port.h"
-#include "devlink-match-port-cache.h"
+#include "devlink-port-cache.h"
+#include "devlink-ifname-tracker.h"
 
 int config_parse_devlink_port_index(CONFIG_PARSER_ARGUMENTS) {
         DevlinkMatchPort *port = data;
@@ -48,7 +49,6 @@ static void devlink_match_port_index_hash_func(const DevlinkMatch *match, struct
 static int devlink_match_port_index_compare_func(const DevlinkMatch *x, const DevlinkMatch *y) {
         const DevlinkMatchPort *xport = &x->port;
         const DevlinkMatchPort *yport = &y->port;
-        int d;
 
         assert(xport->index_valid);
         assert(yport->index_valid);
@@ -76,7 +76,6 @@ static int devlink_match_port_index_genl_read(
                 Manager *m,
                 DevlinkMatch *match) {
         DevlinkMatchPort *port = &match->port;
-        uint32_t split_group;
         int r;
 
         assert(!port->index_valid);
@@ -159,7 +158,6 @@ static int devlink_match_port_split_genl_read(
 }
 
 const DevlinkMatchVTable devlink_match_port_split_vtable = {
-        .check = devlink_match_port_split_check,
         .log_prefix = devlink_match_port_split_log_prefix,
         .hash_func = devlink_match_port_split_hash_func,
         .compare_func = devlink_match_port_split_compare_func,
@@ -226,14 +224,14 @@ static int devlink_match_port_ifname_genl_read(
          *    is not generated for this change.
          * 3) Alternative ifnames are not handled in devlink messages at all.
          * So instead, query the port cache for ifindex and then obtain ifname
-         * from another cache that stores info coming in over RT Netlink.
+         * from tracker that stores info coming in over RT Netlink.
          */
 
         r = devlink_port_cache_query(m, match, &ifindex);
         if (r < 0)
                 return 0;
 
-        return devlink_ifname_cache_query(m, ifindex, port->ifname);
+        return devlink_ifname_tracker_query(m, ifindex, &port->ifname);
 }
 
 const DevlinkMatchVTable devlink_match_port_ifname_vtable = {

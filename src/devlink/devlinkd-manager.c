@@ -161,7 +161,7 @@ int manager_enumerate(Manager *m) {
         return manager_enumerate_genl(m, true);
 }
 
-int manager_enumerate_one(Manager *m, DevlinkKey *key) {
+int manager_enumerate_genl_one(Manager *m, DevlinkKey *key) {
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL;
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *rep = NULL;
         uint8_t enumerate_cmd = _DEVLINK_VTABLE(key->kind)->genl_enumerate_cmd;
@@ -260,13 +260,10 @@ static int manager_setup_rtnl_filter(Manager *m) {
                 BPF_STMT(BPF_LD + BPF_W + BPF_LEN, 0),                                      /* A <- packet length */
                 BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, sizeof(struct nlmsghdr), 1, 0),         /* A (packet length) >= sizeof(struct nlmsghdr) ? */
                 BPF_STMT(BPF_RET + BPF_K, 0),                                               /* reject */
-                /* Always accept multipart message. */
-                BPF_STMT(BPF_LD + BPF_H + BPF_ABS, offsetof(struct nlmsghdr, nlmsg_flags)), /* A <- message flags */
-                BPF_JUMP(BPF_JMP + BPF_JSET + BPF_K, htobe16(NLM_F_MULTI), 0, 1),           /* message flags has NLM_F_MULTI ? */
-                BPF_STMT(BPF_RET + BPF_K, UINT32_MAX),                                      /* accept */
-                /* Accept all message types except for RTM_NEWNEIGH or RTM_DELNEIGH. */
+                /* Accept all messages of types RTM_NEWLINK or RTM_DELLINK. */
                 BPF_STMT(BPF_LD + BPF_H + BPF_ABS, offsetof(struct nlmsghdr, nlmsg_type)),  /* A <- message type */
-                BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, htobe16(RTM_NEWLINK), 1, 0),            /* message type == RTM_NEWLINK ? */
+                BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, htobe16(RTM_NEWLINK), 2, 0),            /* message type == RTM_NEWLINK ? */
+                BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, htobe16(RTM_DELLINK), 1, 0),            /* message type == RTM_DELLINK ? */
                 BPF_STMT(BPF_RET + BPF_K, 0),                                               /* reject */
                 BPF_STMT(BPF_RET + BPF_K, UINT32_MAX),                                      /* accept */
         };
@@ -299,10 +296,6 @@ static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *messa
         if (r < 0) {
                 log_warning_errno(r, "rtnl: Could not get message type, ignoring: %m");
                 return 0;
-        } else if (type != RTM_NEWLINK) {
-                log_warning("rtnl: Received unexpected message type %u when processing link, ignoring.", type);
-                return 0;
-        }
 
         r = sd_rtnl_message_link_get_ifindex(message, &ifindex);
         if (r < 0) {
@@ -313,14 +306,19 @@ static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *messa
                 return 0;
         }
 
-        r = sd_netlink_message_read_string(message, IFLA_IFNAME, &ifname);
-        if (r < 0) {
-                log_warning_errno(r, "rtnl: Received link message without ifname, ignoring: %m");
+        switch (type) {
+        case RTM_NEWLINK:
+                r = devlink_ifname_tracker_ifindex_update(m, ifindex, message);
+                if (r < 0)
+                        log_warning_errno(r, "rtnl: Could not update ifname tracker, ignoring: %m");
+                return 0;
+        case RTM_DELLINK:
+                devlink_ifname_tracker_ifindex_remove(m, ifindex);
+                return 0;
+        default:
+                log_warning("rtnl: Received unexpected message type %u when processing link, ignoring.", type);
                 return 0;
         }
-        devlink_ifname_cache_update(m, ifindex, 0, ifname);
-
-        return 0;
 }
 
 static int manager_connect_rtnl(Manager *m) {
@@ -341,6 +339,10 @@ static int manager_connect_rtnl(Manager *m) {
                 return r;
 
         r = netlink_add_match(m->rtnl, NULL, RTM_NEWLINK, &manager_rtnl_process_link, NULL, m, "devlinkd-rtnl_process_link");
+        if (r < 0)
+                return r;
+
+        r = netlink_add_match(m->rtnl, NULL, RTM_DELLINK, &manager_rtnl_process_link, NULL, m, "devlinkd-rtnl_process_link");
         if (r < 0)
                 return r;
 
@@ -409,8 +411,8 @@ Manager* manager_free(Manager *m) {
                 return NULL;
 
         m->devlink_objs = hashmap_free(m->devlink_objs);
-        m->match_port_cache_by_ifindex = hashmap_free(m->match_port_cache_by_ifindex);
-        m->match_port_cache_by_key = hashmap_free(m->match_port_cache_by_key);
+        m->ifname_tracker_by_ifindex = hashmap_free(m->ifname_tracker_by_ifindex);
+        m->ifname_tracker_by_ifname = hashmap_free(m->ifname_tracker_by_ifname);
         m->reload = hashmap_free(m->reload);
 
         sd_netlink_unref(m->genl);

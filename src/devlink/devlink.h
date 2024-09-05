@@ -23,6 +23,7 @@ typedef struct Devlink {
         bool in_hashmap;
         bool expected_removal;
         sd_event_source *expected_removal_timeout_event_source;
+        LIST_FIELDS(Devlink, ifname_tracker);
 } Devlink;
 
 enum DevlinkMonitorCommandRetval {
