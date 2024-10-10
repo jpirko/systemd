@@ -10,11 +10,12 @@
 #include "devlink.h"
 #include "devlink-key.h"
 #include "devlink-match.h"
+#include "devlink-ifname-tracker.h"
 
 typedef struct DevlinkIfnameTrackerItem {
         Manager *manager;
         unsigned n_ref;
-        const char *ifname;
+        char *ifname;
         uint64_t ifindex;
         bool in_hashmap_by_ifname;
         bool in_hashmap_by_ifindex;
@@ -23,8 +24,7 @@ typedef struct DevlinkIfnameTrackerItem {
 
 static DevlinkIfnameTrackerItem *devlink_ifname_tracker_item_free(DevlinkIfnameTrackerItem *item) {
         assert(item);
-
-        assert(item->list is empty);
+        assert(item->ifname_tracker == NULL);
 
         if (item->in_hashmap_by_ifindex)
                 hashmap_remove(item->manager->ifname_tracker_by_ifindex, &item->ifindex);
@@ -37,7 +37,8 @@ static DevlinkIfnameTrackerItem *devlink_ifname_tracker_item_free(DevlinkIfnameT
         return mfree(item);
 }
 
-DEFINE_TRIVIAL_REF_UNREF_FUNC(DevlinkIfnameTrackerIterm, devlink_ifname_tracker_item, devlink_ifname_tracker_item_free);
+DEFINE_PRIVATE_TRIVIAL_REF_UNREF_FUNC(DevlinkIfnameTrackerItem, devlink_ifname_tracker_item, devlink_ifname_tracker_item_free);
+DEFINE_TRIVIAL_CLEANUP_FUNC(DevlinkIfnameTrackerItem *, devlink_ifname_tracker_item_unref);
 
 DEFINE_PRIVATE_HASH_OPS_WITH_VALUE_DESTRUCTOR(
         devlink_ifname_tracker_item_by_ifname_hash_ops,
@@ -52,8 +53,6 @@ DEFINE_PRIVATE_HASH_OPS_WITH_VALUE_DESTRUCTOR(
         uint64_t,
         uint64_hash_func,
         uint64_compare_func,
-        string_hash_func,
-        string_compare_func,
         DevlinkIfnameTrackerItem,
         devlink_ifname_tracker_item_unref);
 
@@ -61,11 +60,11 @@ static DevlinkIfnameTrackerItem *devlink_ifname_tracker_item_alloc(Manager *m, c
         _cleanup_(devlink_ifname_tracker_item_unrefp) DevlinkIfnameTrackerItem *item;
         int r;
 
-        item = malloc0(sizeof(DevlinkMatchPortCacheItem));
+        item = malloc0(sizeof(DevlinkIfnameTrackerItem));
         if (!item)
                 return NULL;
 
-        *item = (DevlinkMatchPortCacheItem) {
+        *item = (DevlinkIfnameTrackerItem) {
                 .manager = m,
                 .n_ref = 1,
         };
@@ -85,7 +84,6 @@ static DevlinkIfnameTrackerItem *devlink_ifname_tracker_item_alloc(Manager *m, c
 int devlink_ifname_tracker_add(Devlink *devlink) {
         DevlinkIfnameTrackerItem *item;
         char *ifname;
-        int r;
 
         assert(devlink);
 
@@ -93,14 +91,16 @@ int devlink_ifname_tracker_add(Devlink *devlink) {
                 return 0;
 
         ifname = devlink->key.match.port.ifname;
-        item = hashmap_get(devlink->m->ifname_tracker_by_ifname, ifname);
+        item = hashmap_get(devlink->manager->ifname_tracker_by_ifname, ifname);
         if (!item) {
-                item = devlink_match_port_cache_item_alloc(devlink->m, ifname);
+                item = devlink_ifname_tracker_item_alloc(devlink->manager, ifname);
                 if (!item)
                         return -ENOMEM;
         }
 
-        LIST_APPEND(ifname_tracker, item->ifname_tracker, devlink)
+        LIST_APPEND(ifname_tracker, item->ifname_tracker, devlink);
+        log_debug("Ifname tracker: \"%s\" added\n", ifname);
+        devlink->in_ifname_tracker = true;
         devlink_ifname_tracker_item_ref(item);
 
         return 0;
@@ -116,10 +116,11 @@ void devlink_ifname_tracker_del(Devlink *devlink) {
                 return;
 
         ifname = devlink->key.match.port.ifname;
-        item = hashmap_get(devlink->m->ifname_tracker_by_ifname, ifname);
+        item = hashmap_get(devlink->manager->ifname_tracker_by_ifname, ifname);
         assert(item);
 
-        LIST_REMOVE(ifname_tracker, item->ifname_tracker, devlink)
+        LIST_REMOVE(ifname_tracker, item->ifname_tracker, devlink);
+        log_debug("Ifname tracker: \"%s\" removed\n", ifname);
         devlink_ifname_tracker_item_unref(item);
 }
 
@@ -127,7 +128,7 @@ int devlink_ifname_tracker_query(Manager *m, uint64_t ifindex, char **ifname) {
         DevlinkIfnameTrackerItem *item;
         int r;
 
-        item = hashmap_get(m->ifname_tracker_by_ifindex, ifindex);
+        item = hashmap_get(m->ifname_tracker_by_ifindex, &ifindex);
         if (!item)
                 return -ENOENT;
         r = free_and_strdup(ifname, item->ifname);
@@ -137,8 +138,7 @@ int devlink_ifname_tracker_query(Manager *m, uint64_t ifindex, char **ifname) {
 }
 
 static int devlink_ifname_tracker_ifindex_update_one(Manager *m, uint64_t ifindex, const char *ifname, const char **found_ifname) {
-        DevlinkIfnameTrackerItem *item, orig_item;
-        Devlink *devlink;
+        DevlinkIfnameTrackerItem *item, *orig_item;
         int r;
 
         item = hashmap_get(m->ifname_tracker_by_ifname, ifname);
@@ -151,23 +151,23 @@ static int devlink_ifname_tracker_ifindex_update_one(Manager *m, uint64_t ifinde
 
         *found_ifname = item->ifname;
 
-        orig_item = hashmap_get(m->ifname_tracker_by_ifindex, ifindex);
+        orig_item = hashmap_get(m->ifname_tracker_by_ifindex, &ifindex);
         if (item == orig_item)
                 return 0;
 
         item->ifindex = ifindex;
-        r = hashmap_ensure_put(m->ifname_tracker_by_ifindex, &devlink_ifname_tracker_item_by_ifindex_hash_ops, item->ifindex, item);
+        r = hashmap_ensure_put(&m->ifname_tracker_by_ifindex, &devlink_ifname_tracker_item_by_ifindex_hash_ops, &item->ifindex, item);
         if (r < 0)
                 return r;
+        log_debug("Ifname tracker: \"%s\" updated to ifindex \"%lu\"\n", item->ifname, ifindex);
 
         LIST_FOREACH(ifname_tracker, devlink, item->ifname_tracker)
-                (void) manager_enumerate_one(m, &devlink->key);
+                (void) manager_enumerate_genl_one(m, &devlink->key);
 
         return 0;
 }
 
 int devlink_ifname_tracker_ifindex_update(Manager *m, uint64_t ifindex, sd_netlink_message *message) {
-        DevlinkIfnameTrackerItem *item, orig_item;
         const char *found_ifname = NULL;
         const char *ifname;
         uint16_t list_size;
@@ -201,5 +201,5 @@ int devlink_ifname_tracker_ifindex_update(Manager *m, uint64_t ifindex, sd_netli
 }
 
 void devlink_ifname_tracker_ifindex_remove(Manager *m, uint64_t ifindex) {
-        hashmap_remove(item->manager->ifname_tracker_by_ifindex, &ifindex);
+        hashmap_remove(m->ifname_tracker_by_ifindex, &ifindex);
 }

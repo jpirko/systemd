@@ -17,7 +17,7 @@ static int devlink_reload(Devlink *devlink) {
         if (r < 0)
                 return log_devlink_error_errno(devlink, r, "Failed to create netlink message: %m");;
 
-        r = devlink_key_genl_append(req, &devlink.key);
+        r = devlink_key_genl_append(req, &devlink->key);
         if (r < 0)
                 return r;
 
@@ -85,11 +85,11 @@ int devlink_reload_queue(Manager *m, DevlinkMatch *match) {
         devlink_key_init(&key, DEVLINK_KIND_RELOAD);
         devlink_key_copy_from_match(&key, match, DEVLINK_MATCH_BIT_DEV);
 
-        devlink = devlink_get(m, key);
+        devlink = devlink_get(m, &key);
         if (!devlink)
                 return -ENOENT;
 
-        r = devlink_reload_queue_event(devlink);
+        r = devlink_reload_queue_event(m, devlink);
         if (r < 0)
                 return log_devlink_error_errno(devlink, r, "Failed to schedule reload: %m");
 
@@ -119,5 +119,5 @@ const DevlinkVTable devlink_reload_vtable = {
         .object_size = sizeof(DevlinkReload),
         .matchsets = devlink_reload_matchsets,
         .genl_monitor_cmds = devlink_reload_commands,
-        .genl_monitor_cmds_count = ELEMENTSOF(devlink_dev_commands),
+        .genl_monitor_cmds_count = ELEMENTSOF(devlink_reload_commands),
 };

@@ -21,12 +21,13 @@ typedef struct Devlink {
         unsigned n_ref;
         char *filename;
         bool in_hashmap;
+        bool in_ifname_tracker;
         bool expected_removal;
         sd_event_source *expected_removal_timeout_event_source;
-        LIST_FIELDS(Devlink, ifname_tracker);
+        LIST_FIELDS(struct Devlink, ifname_tracker);
 } Devlink;
 
-enum DevlinkMonitorCommandRetval {
+typedef enum DevlinkMonitorCommandRetval {
         /* Success. */
         DEVLINK_MONITOR_COMMAND_RETVAL_OK,
         /* Indicate that the object should be deleted. */

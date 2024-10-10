@@ -38,14 +38,13 @@
 #include "devlinkd-manager.h"
 #include "devlink.h"
 #include "devlink-key.h"
-#include "devlink-match-port-cache.h"
+#include "devlink-ifname-tracker.h"
 
 /* use 128 MB for receive socket kernel queue. */
 #define RCVBUF_SIZE    (128*1024*1024)
 
 static void _manager_genl_process_message(sd_netlink *genl, sd_netlink_message *message,
                                           Manager *m, uint8_t enumerate_cmd) {
-        const DevlinkMonitorCommand *monitor_cmd;
         const DevlinkVTable *vtable;
         const char *family;
         uint8_t cmd;
@@ -107,7 +106,7 @@ static int manager_genl_enumerate_process_message(
                 Manager *m,
                 uint8_t enumerate_cmd) {
         log_debug("devlink netlink: Incoming enumeration message");
-        _manager_genl_process_message(genl, message, m, kind);
+        _manager_genl_process_message(genl, message, m, enumerate_cmd);
         return 0;
 }
 
@@ -136,7 +135,7 @@ static int manager_enumerate_kind(Manager *m, DevlinkKind kind) {
                 return r;
 
         for (sd_netlink_message *rep_one = rep; rep_one; rep_one = sd_netlink_message_next(rep_one)) {
-                k = manager_genl_enumerate_process_message(m->genl, rep_one, m, enumereate_cmd);
+                k = manager_genl_enumerate_process_message(m->genl, rep_one, m, enumerate_cmd);
                 if (k < 0 && r >= 0)
                         r = k;
         }
@@ -275,7 +274,6 @@ static int manager_setup_rtnl_filter(Manager *m) {
 }
 
 static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *message, Manager *m) {
-        const char *ifname;
         uint16_t type;
         int ifindex;
         int r;
@@ -296,6 +294,7 @@ static int manager_rtnl_process_link(sd_netlink *rtnl, sd_netlink_message *messa
         if (r < 0) {
                 log_warning_errno(r, "rtnl: Could not get message type, ignoring: %m");
                 return 0;
+        }
 
         r = sd_rtnl_message_link_get_ifindex(message, &ifindex);
         if (r < 0) {

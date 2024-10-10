@@ -31,6 +31,8 @@ sources = files('''
         devlink-port-cache.h
         devlink-reload.c
         devlink-reload.h
+        devlink-ifname-tracker.c
+        devlink-ifname-tracker.h
         devlinkd-manager.c
         devlinkd-manager.h
 '''.split())

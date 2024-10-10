@@ -31,7 +31,7 @@ static int devlink_port_cache_genl_cmd_del_msg_process(
         return DEVLINK_MONITOR_COMMAND_RETVAL_DELETE;
 }
 
-static const DevlinkMatchSet devlink_port_matchsets[] = {
+static const DevlinkMatchSet devlink_port_cache_matchsets[] = {
         DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX,
         0,
 };
@@ -44,7 +44,7 @@ static const DevlinkMonitorCommand devlink_port_cache_commands[] = {
 const DevlinkVTable devlink_port_cache_vtable = {
         .object_size = sizeof(DevlinkPortCache),
         .matchsets = devlink_port_cache_matchsets,
-        .alloc_on_demand = true;
+        .alloc_on_demand = true,
         .genl_monitor_cmds = devlink_port_cache_commands,
         .genl_monitor_cmds_count = ELEMENTSOF(devlink_port_cache_commands),
 };
@@ -53,12 +53,11 @@ int devlink_port_cache_query(Manager *m, DevlinkMatch *match, uint32_t *ifindex)
         DevlinkPortCache *port_cache;
         Devlink *devlink;
         DevlinkKey key;
-        int r;
 
         devlink_key_init(&key, DEVLINK_KIND_PORT_CACHE);
         devlink_key_copy_from_match(&key, match, DEVLINK_MATCH_BIT_DEV | DEVLINK_MATCH_BIT_PORT_INDEX);
 
-        devlink = devlink_get(m, key);
+        devlink = devlink_get(m, &key);
         if (!devlink)
                 return -ENOENT;
 

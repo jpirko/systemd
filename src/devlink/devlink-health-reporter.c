@@ -147,8 +147,7 @@ static int devlink_health_reporter_auto_dump_update(
 static int devlink_health_reporter_genl_cmd_get_msg_process(
                 Devlink *devlink,
                 DevlinkKey *lookup_key,
-                sd_netlink_message *message,
-                int message_iterator) {
+                sd_netlink_message *message) {
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL;
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *rep = NULL;
         bool set_needed = false;

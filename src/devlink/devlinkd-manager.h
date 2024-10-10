@@ -23,8 +23,8 @@ struct Manager {
         sd_event *event;
         sd_event_source *periodic_enumeration_event_source;
         Hashmap *devlink_objs;
-        Hashmap *match_port_cache_by_key;
-        Hashmap *match_port_cache_by_ifindex;
+        Hashmap *ifname_tracker_by_ifindex;
+        Hashmap *ifname_tracker_by_ifname;
         Hashmap *reload;
 };
 
@@ -36,6 +36,6 @@ Manager* manager_free(Manager *m);
 int manager_start(Manager *m);
 int manager_load_config(Manager *m);
 int manager_enumerate(Manager *m);
-int manager_enumerate_one(Manager *m, DevlinkKey *key);
+int manager_enumerate_genl_one(Manager *m, DevlinkKey *key);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(Manager *, manager_free);

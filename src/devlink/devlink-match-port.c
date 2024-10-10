@@ -111,6 +111,10 @@ const DevlinkMatchVTable devlink_match_port_index_vtable = {
         .genl_append = devlink_match_port_genl_append,
 };
 
+static bool devlink_match_port_split_check(const DevlinkMatch *match) {
+        return true;
+}
+
 static void devlink_match_port_split_log_prefix(char **buf, int *len, const DevlinkMatch *match) {
         const DevlinkMatchPort *port = &match->port;
 
@@ -158,6 +162,7 @@ static int devlink_match_port_split_genl_read(
 }
 
 const DevlinkMatchVTable devlink_match_port_split_vtable = {
+        .check = devlink_match_port_split_check,
         .log_prefix = devlink_match_port_split_log_prefix,
         .hash_func = devlink_match_port_split_hash_func,
         .compare_func = devlink_match_port_split_compare_func,

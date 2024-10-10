@@ -20,7 +20,9 @@
 #include "devlink-port.h"
 #include "devlink-param.h"
 #include "devlink-health-reporter.h"
-#include "devlink-ifname.h"
+#include "devlink-reload.h"
+#include "devlink-port-cache.h"
+#include "devlink-ifname-tracker.h"
 #include "devlinkd-manager.h"
 
 const DevlinkVTable * const devlink_vtable[_DEVLINK_KIND_MAX] = {
@@ -80,7 +82,8 @@ static Devlink *devlink_free(Devlink *devlink) {
 
         devlink->expected_removal_timeout_event_source = sd_event_source_disable_unref(devlink->expected_removal_timeout_event_source);
 
-        devlink_ifname_tracker_del(devlink);
+        if (devlink->in_ifname_tracker)
+                devlink_ifname_tracker_del(devlink);
 
         if (devlink->in_hashmap)
                 hashmap_remove(devlink->manager->devlink_objs, &devlink->key);
@@ -284,7 +287,7 @@ int devlink_load(Manager *m, bool reload) {
 void devlink_genl_process_message(sd_netlink_message *message,
                                   Manager *m, DevlinkKind kind,
                                   const DevlinkMonitorCommand *monitor_cmd) {
-        DevlinkVTable *vtable _DEVLINK_VTABLE(kind);
+        const DevlinkVTable *vtable = _DEVLINK_VTABLE(kind);
         DevlinkMatchSet matchset;
         DevlinkKey key = {};
         Devlink *devlink;
